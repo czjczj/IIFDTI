@@ -8,6 +8,7 @@ an end-to-end deep learning-based method named IIFDTI is developed to predict DT
 - gensim >= 3.4.0
 - numpy >= 1.16.1
 - pandas >= 1.1.4
+- transformers >= 3.1.0
 
 ## Using
 1. model.py: the construction of the neural network
