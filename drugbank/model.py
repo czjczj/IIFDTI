@@ -8,6 +8,8 @@ sys.path.append('..')
 import numpy as np
 from sklearn.metrics import roc_auc_score, precision_score, recall_score,precision_recall_curve, auc
 from utils.lookahead import Lookahead
+from transformers import AdamW
+from transformers import get_cosine_schedule_with_warmup
 class SelfAttention(nn.Module):
     def __init__(self, hid_dim, n_heads, dropout, device):
         super().__init__()
@@ -294,8 +296,9 @@ class Predictor(nn.Module):
 
     def __call__(self, data, train=True):
         compound, adj, protein, correct_interaction, smi_ids, prot_ids, atom_num, protein_num = data
-        Loss = nn.CrossEntropyLoss()
-
+        #Loss = nn.CrossEntropyLoss()
+        weight_ce = torch.FloatTensor([1, 3]).cuda()
+        Loss = nn.CrossEntropyLoss(weight=weight_ce)
         if train:
             predicted_interaction = self.forward(compound, adj, protein, smi_ids, prot_ids, atom_num, protein_num)
             loss = Loss(predicted_interaction, correct_interaction)
@@ -381,9 +384,8 @@ def pack(atoms, adjs, proteins, labels, smi_ids, prot_ids, device):
         prot_ids_new[i, :t_len] = prot_id[:t_len]
     return (atoms_new, adjs_new, proteins_new, labels_new, smi_ids_new, prot_ids_new, atom_num, protein_num)
 
-from transformers import AdamW
 class Trainer(object):
-    def __init__(self, model, lr, weight_decay, batch):
+    def __init__(self, model, lr, weight_decay, batch, n_sample):
         self.model = model
         weight_p, bias_p = [], []
         for p in self.model.parameters():
@@ -396,7 +398,7 @@ class Trainer(object):
             else:
                 weight_p += [p]
         self.optimizer = AdamW([{'params': weight_p, 'weight_decay': weight_decay}, {'params': bias_p, 'weight_decay': 0}], lr=lr)
-        self.optimizer = Lookahead(self.optimizer, k=5, alpha=0.5)
+        self.lr_scheduler = get_cosine_schedule_with_warmup(self.optimizer, num_warmup_steps=10, num_training_steps=n_sample // batch)
         self.batch = batch
 
     def train(self, dataset, device):
@@ -426,6 +428,7 @@ class Trainer(object):
             else:
                 continue
             if i % self.batch == 0 or i == N:
+                self.lr_scheduler.step()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
             loss_total += loss.item()
