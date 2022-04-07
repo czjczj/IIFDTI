@@ -5,6 +5,7 @@ import random
 import os
 import argparse
 from model import *
+from utils.commons import get_parameter_number
 import timeit
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 def load_tensor(file_name, dtype):
@@ -42,15 +43,16 @@ if __name__ == "__main__":
     parser.add_argument('--batch', type=int, default=64, help='batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-6, help='weight decay')
-    parser.add_argument('--iteration', type=int, default=50, help='the iteration for training')
+    parser.add_argument('--iteration', type=int, default=100, help='the iteration for training')
     parser.add_argument('--n_folds', type=int, default=5, help='the fold count for cross-entropy')
     parser.add_argument('--seed', type=int, default=2021, help='the random seed')
     parser.add_argument('--kernel_size', type=int, default=9, help='the kernel size of Conv1D in transformer')
+    parser.add_argument('--save_name', type=str, default='test', help='the kernel size of Conv1D in transformer')
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     init_seed(args.seed)
-    with open('./data/drugbank.pickle',"rb") as f:
+    with open(f'./data/{args.model_name}.pickle',"rb") as f:
         data = pickle.load(f)
     dataset = shuffle_dataset(data, 1234)
 
@@ -65,14 +67,21 @@ if __name__ == "__main__":
         dataset_dev, dataset_test = split_dataset(dataset_test, 0.5)
 
         model = Predictor(args.hid_dim, args.n_layers, args.kernel_size, args.n_heads, args.pf_dim, args.dropout, device, args.atom_dim, args.protein_dim)
+        get_parameter_number(model)
+
         model.to(device)
-        # trainer = Trainer(model, args.lr, args.weight_decay, args.batch, len(dataset_train))
-        trainer = Trainer(model, args.lr, args.weight_decay, args.batch)
+        trainer = Trainer(model, args.lr, args.weight_decay, args.batch, len(dataset_train), args.iteration)
+        #trainer = Trainer(model, args.lr, args.weight_decay, args.batch)
         tester = Tester(model)
 
-        file_AUCs = f'./result/{args.model_name}_{fold}.txt'
-        file_auc_test = f'./result/test_{args.model_name}_{fold}.txt'
-        file_model = f'./model/{args.model_name}_{fold}.pt'
+        if args.save_name == 'test':
+            file_AUCs = f'./result/{args.model_name}_{fold}.txt'
+            file_auc_test = f'./result/test_{args.model_name}_{fold}.txt'
+            file_model = f'./model/{args.model_name}_{fold}.pt'
+        else:
+            file_AUCs = f'./result/{args.save_name}_{fold}.txt'
+            file_auc_test = f'./result/test_{args.save_name}_{fold}.txt'
+            file_model = f'./model/{args.save_name}_{fold}.pt'
 
         AUCs = ('Epoch\tTime(sec)\tLoss_train\tAUC_dev\tPRC_dev\tPrecison_dev\tRecall_dev')
         with open(file_AUCs, 'w') as f:

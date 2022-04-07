@@ -385,7 +385,7 @@ def pack(atoms, adjs, proteins, labels, smi_ids, prot_ids, device):
     return (atoms_new, adjs_new, proteins_new, labels_new, smi_ids_new, prot_ids_new, atom_num, protein_num)
 
 class Trainer(object):
-    def __init__(self, model, lr, weight_decay, batch, n_sample):
+    def __init__(self, model, lr, weight_decay, batch, n_sample, epochs):
         self.model = model
         weight_p, bias_p = [], []
         for p in self.model.parameters():
@@ -398,7 +398,7 @@ class Trainer(object):
             else:
                 weight_p += [p]
         self.optimizer = AdamW([{'params': weight_p, 'weight_decay': weight_decay}, {'params': bias_p, 'weight_decay': 0}], lr=lr)
-        self.lr_scheduler = get_cosine_schedule_with_warmup(self.optimizer, num_warmup_steps=10, num_training_steps=n_sample // batch)
+        self.lr_scheduler = get_cosine_schedule_with_warmup(self.optimizer, num_warmup_steps=10, num_training_steps=(n_sample // batch)*epochs)
         self.batch = batch
 
     def train(self, dataset, device):
@@ -428,8 +428,8 @@ class Trainer(object):
             else:
                 continue
             if i % self.batch == 0 or i == N:
-                self.lr_scheduler.step()
                 self.optimizer.step()
+                self.lr_scheduler.step()
                 self.optimizer.zero_grad()
             loss_total += loss.item()
         return loss_total
